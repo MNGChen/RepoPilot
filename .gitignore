@@ -10,6 +10,9 @@ venv/
 # Local V2 Chroma database; rebuild it from workspace/test_repo when needed.
 workspace/vectorstore/
 
+# Local V3 memory database; generated from selected durable memories.
+workspace/memory_store/
+
 # Tooling
 .pytest_cache/
 .mypy_cache/

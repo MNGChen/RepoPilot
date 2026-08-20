@@ -10,3 +10,4 @@ class AgentState(TypedDict):
     """Conversation history, including user, model, and tool messages."""
 
     messages: Annotated[list[AnyMessage], add_messages]
+    memory_context: str

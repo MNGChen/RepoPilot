@@ -1,34 +1,89 @@
 # DevPilot
 
-DevPilot is a small, learning-focused AI developer agent. It will help developers inspect and understand a local code repository using an LLM, tools, and a LangGraph workflow.
+DevPilot is a learning-focused AI developer agent for understanding a local code repository. It is built with LangChain, LangGraph, OpenAI, and Chroma.
 
-## Step 1: Project setup
+## Capabilities
 
-This first step creates the project foundation only. The agent, LangGraph workflow, and repository tools are deliberately not implemented yet.
+### V1 — Tool-using agent
 
+- LangGraph state and dynamic Agent Loop.
+- `list_files()` safely lists `workspace/test_repo/`.
+- `read_file(path)` safely reads a UTF-8 file inside that repository.
+- Tool observations are appended to the LangGraph message state.
+
+### V2 — Agentic RAG
+
+- Repository files are loaded, chunked, embedded, and stored in local Chroma.
+- `search_repository(query)` performs semantic repository search.
+- The LLM decides when retrieval is useful; RAG is not mandatory preprocessing.
+
+### V3 — Agent Memory
+
+- Short-term memory: LangGraph `messages` state for one Agent run.
+- Long-term memory: a separate persistent Chroma collection.
+- The LLM can selectively call `save_memory(content, memory_type)` for durable user preferences, project facts, and architecture decisions.
+- Relevant long-term memory is retrieved before the Agent node runs.
+
+## Architecture
+
+```text
+User question
+    ↓
+retrieve_memory node
+    ↓ relevant long-term memory context
+agent node (LLM)
+    ↓ conditional edge
+    ├── no tool calls ───────────────────────────────→ END
+    └── tool calls → ToolNode → agent node → ...
 ```
-devpilot/
-├── app/
-│   ├── agent/              # LangGraph state, nodes, and graph (later)
-│   └── tools/              # Repository tools (later)
-├── workspace/
-│   └── test_repo/          # A harmless local repository DevPilot will inspect
-├── .env.example            # API-key template; never commit the real .env file
-├── .gitignore
-├── requirements.txt
-└── README.md
+
+| Tool | Purpose |
+|---|---|
+| `list_files()` | Discover repository structure. |
+| `read_file(path)` | Read exact source from a known file. |
+| `search_repository(query)` | Semantically search indexed repository chunks. |
+| `save_memory(content, memory_type)` | Persist concise, durable long-term memory. |
+
+## RAG vs Memory
+
+| Repository RAG | Long-term Memory |
+|---|---|
+| Searches repository code and documentation. | Retrieves durable conversation-derived facts. |
+| Stored in `workspace/vectorstore/`. | Stored in `workspace/memory_store/`. |
+| Rebuilt explicitly from `workspace/test_repo/`. | Saved selectively by the Agent. |
+| Example: “Where is the entry point?” | Example: “The user prefers concise Chinese answers.” |
+
+The stores use separate directories and Chroma collections. Repository code is not stored as long-term memory, and user preferences are not mixed into RAG.
+
+## Project structure
+
+```text
+app/
+├── agent/
+│   ├── state.py           # messages and memory_context
+│   ├── nodes.py           # memory retrieval and LLM nodes
+│   └── graph.py           # LangGraph workflow and Agent Loop
+├── memory/
+│   └── store.py           # persistent long-term memory operations
+├── rag/
+│   ├── ingest.py          # repository loading, chunking, indexing
+│   └── retriever.py       # Chroma repository retrieval
+├── tools/
+│   └── repository.py      # safe local repository tools
+└── main.py                # CLI and debug trace output
+
+workspace/
+├── test_repo/             # repository DevPilot analyzes
+├── vectorstore/           # generated V2 Chroma index (ignored)
+└── memory_store/          # generated V3 memory store (ignored)
+
+tests/
+└── test_memory.py         # V3 memory-store tests
 ```
 
-The current workspace directory is the `devpilot/` project root. `workspace/test_repo/` is intentionally a separate, small Python project: later, DevPilot will be restricted to reading only this directory.
+## Setup
 
-## Prerequisites
-
-- Python 3.11 or later
-- An OpenAI API key (needed only when we connect the LLM in a later step)
-
-## Setup and verification
-
-From the project root in PowerShell:
+Prerequisites: Python 3.11+ and an OpenAI API key.
 
 ```powershell
 py -3.11 -m venv .venv
@@ -36,49 +91,55 @@ py -3.11 -m venv .venv
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 Copy-Item .env.example .env
-python -c "import langchain, langgraph, dotenv; print('DevPilot environment is ready.')"
 ```
 
-Add your API key to `.env` after copying it. Do not commit `.env`.
-
-To verify the example repository independently:
-
-```powershell
-python workspace/test_repo/main.py
-```
-
-Expected output:
+Configure `.env`:
 
 ```text
-Hello, DevPilot!
+OPENAI_API_KEY=your_key_here
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
-## Why the example repository exists
+Never commit `.env`, `workspace/vectorstore/`, or `workspace/memory_store/`.
 
-DevPilot needs a predictable local repository to inspect while we learn. It has a simple entry point and one reusable module, so later questions such as “Where is the entry point?” or “Explain this file” have concrete answers.
+## Running DevPilot
 
-## Step 2: Repository tools
+```powershell
+python -X utf8 -m app.main "What files are in this project?"
+python -X utf8 -m app.main --debug "How is the greeting implemented?"
+```
 
-`app/tools/repository.py` contains two small, read-only Python functions:
+Debug output exposes the actual execution path:
 
-- `list_files()` returns a tree of `workspace/test_repo/`.
-- `read_file(path)` reads one UTF-8 text file from that repository.
+```text
+[0] Long-term memory retrieved
+[1] User
+[2] LLM tool decision
+[3] Tool observation
+[4] LLM final response generated
+```
 
-The functions are deliberately not connected to an LLM yet. Keeping the tool
-logic separate makes it easy to test and lets a later LangGraph node use the
-same functions.
+## Indexing and standalone RAG test
 
-### Security boundary
+Build or rebuild the repository index before semantic search:
 
-The target repository is fixed to `workspace/test_repo/`. `read_file` rejects
-empty and absolute paths, resolves relative paths, and verifies that the final
-path remains inside the target directory. This blocks `../../.env` and also a
-symlink that points outside the repository. Files larger than 100 KB are not
-read, which prevents oversized tool responses from consuming LLM context.
+```powershell
+python -X utf8 -m app.rag.ingest
+python -X utf8 -m app.rag.retriever "Where is the greeting created?"
+```
 
-### Test the tools
+The ingestion command should print:
 
-After activating your virtual environment, run:
+```text
+Indexed 4 chunks in workspace/vectorstore.
+```
+
+For the sample repository, the retrieval result should include `src/greetings.py`.
+
+## Test cases
+
+### V1 — safe repository tools
 
 ```powershell
 python -X utf8 -c "from app.tools.repository import list_files; print(list_files())"
@@ -86,50 +147,65 @@ python -X utf8 -c "from app.tools.repository import read_file; print(read_file('
 python -X utf8 -c "from app.tools.repository import read_file; print(read_file('../../.env'))"
 ```
 
-The third command should return an `Access denied` message, not the contents
-of `.env`.
+| Case | Expected result |
+|---|---|
+| List files | A readable tree rooted at `test_repo/`. |
+| Read `main.py` | Returns the file content. |
+| Path traversal | Returns `Access denied`; it never exposes `.env`. |
 
-## Next step
+### V2 — Agentic RAG and tool routing
 
-## Step 3: LangGraph agent loop
-
-The graph is now deliberately small and dynamic:
-
-```text
-START → agent → conditional edge ── no tool calls ──→ END
-                       │
-                       └── tool calls → tools → agent
-```
-
-- `AgentState` in `app/agent/state.py` stores `messages`. Its `add_messages`
-  reducer appends messages instead of replacing the history.
-- The `agent` node invokes `ChatOpenAI` with DevPilot's system prompt and the
-  complete message history. The model has the two repository functions bound
-  as tool schemas.
-- The conditional edge examines the latest `AIMessage`. Tool calls route to
-  `ToolNode`; otherwise the AI message is the final answer and the graph ends.
-- `ToolNode` executes every requested tool and appends `ToolMessage`
-  observations to state. The agent node then receives those observations on
-  its next turn, so it can request more information or answer.
-
-This is an **agent loop** because the graph can repeat `agent → tools → agent`
-as often as the model needs. It is not a hard-coded, one-tool workflow.
-
-### Run DevPilot
-
-Put a valid `OPENAI_API_KEY` in `.env`, then run:
+After indexing, use debug mode:
 
 ```powershell
-python -X utf8 -m app.main "Analyze the structure of this project."
-python -X utf8 -m app.main "Where is the entry point?"
-python -X utf8 -m app.main "Explain src/greetings.py"
+python -X utf8 -m app.main --debug "Hello"
+python -X utf8 -m app.main --debug "What files are in this project?"
+python -X utf8 -m app.main --debug "Explain this specific file: main.py"
+python -X utf8 -m app.main --debug "How is the greeting implemented? Search the repository semantically first."
 ```
 
-Expected behavior: the model selects `list_files` and/or `read_file`, receives
-the results as observations, then gives an evidence-based final answer. The
-exact wording and number of calls are model decisions.
+| Query | Expected tool behavior |
+|---|---|
+| `Hello` | No repository tool. |
+| `What files are in this project?` | `list_files`. |
+| `Explain this specific file: main.py` | `read_file`. |
+| Greeting implementation question | `search_repository`; it may additionally use `read_file`. |
 
-## Next step
+### V3 — selective long-term memory
 
-After you have run these commands successfully, we can improve the command
-line experience or inspect the graph execution in detail.
+Run these as two separate CLI executions:
+
+```powershell
+python -X utf8 -m app.main --debug "Remember that I prefer concise Chinese answers."
+python -X utf8 -m app.main --debug "Explain the agent loop."
+```
+
+| Case | Expected result |
+|---|---|
+| Explicit durable preference | Calls `save_memory` with `user_preference`. |
+| New interaction | Debug step `[0]` shows the saved preference. |
+| Casual `Hello` | Does not call `save_memory`. |
+| Invalid memory type/content | Returns a clear `not saved` message. |
+
+Run the V3 memory tests:
+
+```powershell
+pytest
+```
+
+`tests/test_memory.py` covers valid memory types, empty or oversized-memory rejection, persistence, global preference retrieval, semantic matching, deduplication, and memory-context formatting.
+
+> **Important:** the current memory tests use `OpenAIEmbeddings`. They require `OPENAI_API_KEY`, may call the embedding API, and may incur API usage. Chroma data is written only to pytest temporary directories, not the project memory store.
+
+## How V3 memory works
+
+1. A new question enters graph state as a `HumanMessage`.
+2. `retrieve_memory` loads global preferences and semantically relevant durable memories from the separate Memory Chroma collection.
+3. The node writes a formatted context block to `AgentState.memory_context`.
+4. The Agent node sends the system prompt, memory context, and short-term `messages` to the LLM.
+5. The LLM may answer directly, use repository tools, or selectively call `save_memory`.
+6. Tool results become `ToolMessage` observations, and the Agent Loop continues until the LLM makes no more tool calls.
+
+## Interview summary
+
+> DevPilot uses LangGraph state as short-term memory inside a single Agent run. For long-term memory, it stores only selected durable facts in a separate Chroma collection. Before every new question, a retrieval node injects only relevant memory as context. Repository RAG retrieves code evidence; Memory retrieves user preferences and project decisions. The LLM decides when a new fact is important enough to save.
