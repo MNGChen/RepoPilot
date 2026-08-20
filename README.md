@@ -24,6 +24,19 @@ DevPilot is a learning-focused AI developer agent for understanding a local code
 - The LLM can selectively call `save_memory(content, memory_type)` for durable user preferences, project facts, and architecture decisions.
 - Relevant long-term memory is retrieved before the Agent node runs.
 
+### V4 — Context Engineering
+
+- A Context Manager constructs the information sent to the LLM at every Agent
+  step; the complete LangGraph message state is still retained separately.
+- Context priority is: system prompt, relevant long-term memory, current user
+  request, then recent agent-loop history.
+- History keeps six recent messages while preserving tool-call/result pairs.
+- Memory context is capped at 2,000 characters. The latest tool observation is
+  capped at 6,000 characters and older observations at 1,500 characters.
+- Repository search returns at most four chunks, each capped at 1,500
+  characters. RAG chunks are removed from the LLM view when their source file
+  is later read in full.
+
 ## Architecture
 
 ```text
@@ -60,7 +73,9 @@ The stores use separate directories and Chroma collections. Repository code is n
 ```text
 app/
 ├── agent/
-│   ├── state.py           # messages and memory_context
+│   ├── state.py           # messages, memory context, and selected model context
+│   ├── context.py         # V4 context selection and budgets
+│   ├── context_demo.py    # visible V4 manual demonstration
 │   ├── nodes.py           # memory retrieval and LLM nodes
 │   └── graph.py           # LangGraph workflow and Agent Loop
 ├── memory/
@@ -118,6 +133,16 @@ Debug output exposes the actual execution path:
 [2] LLM tool decision
 [3] Tool observation
 [4] LLM final response generated
+```
+
+V4 adds a compact section before that trace for every LLM call. It shows the
+selected message types and character counts, so you can see exactly which
+context sources entered the model input without printing entire source files.
+
+Run the standalone V4 demonstration without pytest:
+
+```powershell
+python -m app.agent.context_demo
 ```
 
 ## Indexing and standalone RAG test

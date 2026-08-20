@@ -23,6 +23,7 @@ MEMORY_TYPES: Final = {
 }
 MAX_MEMORY_LENGTH: Final = 1_000
 MAX_RETRIEVED_MEMORIES: Final = 3
+MAX_GLOBAL_PREFERENCES: Final = 3
 MIN_RELEVANCE_SCORE: Final = 0.65
 
 
@@ -91,18 +92,22 @@ def format_memory_context(memories: list[Document]) -> str:
 
 
 def _get_user_preferences(memory_store: Chroma) -> list[Document]:
-    """Preferences apply to every reply, so retrieve them without similarity filtering."""
+    """Return only the newest global preferences for every reply."""
     stored = memory_store.get(
         where={"memory_type": "user_preference"},
         include=["documents", "metadatas"],
     )
     documents = stored.get("documents") or []
     metadatas = stored.get("metadatas") or []
-    return [
+    preferences = [
         Document(page_content=document, metadata=metadata or {})
         for document, metadata in zip(documents, metadatas, strict=True)
         if document is not None
     ]
+    preferences.sort(
+        key=lambda memory: str(memory.metadata.get("created_at", "")), reverse=True
+    )
+    return preferences[:MAX_GLOBAL_PREFERENCES]
 
 
 def _deduplicate_memories(memories: list[Document]) -> list[Document]:

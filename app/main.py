@@ -24,16 +24,46 @@ def main() -> None:
         print('Usage: python -m app.main [--debug] "Analyze the structure of this project."')
         return
 
-    result = graph.invoke({"messages": [HumanMessage(content=question)]})
     if debug_enabled:
-        _print_debug_trace(result["messages"], result.get("memory_context", ""))
+        result, model_contexts = _invoke_with_context_trace(question)
+    else:
+        result = graph.invoke({"messages": [HumanMessage(content=question)]})
+        model_contexts = []
+
+    if debug_enabled:
+        _print_debug_trace(
+            result["messages"], result.get("memory_context", ""), model_contexts
+        )
 
     final_message = result["messages"][-1]
     print("\nFinal answer:\n")
     print(final_message.content)
 
 
-def _print_debug_trace(messages: list[BaseMessage], memory_context: str) -> None:
+def _invoke_with_context_trace(
+    question: str,
+) -> tuple[dict, list[list[BaseMessage]]]:
+    """Run the graph while retaining the selected input for each LLM call."""
+    result: dict = {}
+    model_contexts: list[list[BaseMessage]] = []
+
+    for state in graph.stream(
+        {"messages": [HumanMessage(content=question)]}, stream_mode="values"
+    ):
+        result = state
+        selected_context = state.get("model_context")
+        messages = state["messages"]
+        if selected_context and isinstance(messages[-1], AIMessage):
+            model_contexts.append(selected_context)
+
+    return result, model_contexts
+
+
+def _print_debug_trace(
+    messages: list[BaseMessage],
+    memory_context: str,
+    model_contexts: list[list[BaseMessage]],
+) -> None:
     """Display the message history that shows DevPilot's agent loop."""
     print("\n=== DevPilot debug trace ===")
 
@@ -41,6 +71,8 @@ def _print_debug_trace(messages: list[BaseMessage], memory_context: str) -> None
         print(f"\n[0] Long-term memory retrieved\n{memory_context}")
     else:
         print("\n[0] Long-term memory retrieved\nNo relevant memory.")
+
+    _print_model_contexts(model_contexts)
 
     for step, message in enumerate(messages, start=1):
         if isinstance(message, HumanMessage):
@@ -56,6 +88,27 @@ def _print_debug_trace(messages: list[BaseMessage], memory_context: str) -> None
             print(f"\n[{step}] LLM final response generated")
 
     print("\n=== End debug trace ===")
+
+
+def _print_model_contexts(model_contexts: list[list[BaseMessage]]) -> None:
+    """Show a compact, inspectable summary of each LLM input selection."""
+    for call_number, model_context in enumerate(model_contexts, start=1):
+        print(f"\n[Context {call_number}] Selected for LLM call")
+        for index, message in enumerate(model_context):
+            content = str(message.content)
+            label = _context_message_label(message, index)
+            print(f"  - {label}: {len(content)} characters")
+
+
+def _context_message_label(message: BaseMessage, index: int) -> str:
+    """Give each selected message a beginner-friendly debug label."""
+    if isinstance(message, HumanMessage):
+        return "Current user request" if index <= 2 else "Conversation user message"
+    if isinstance(message, ToolMessage):
+        return f"Tool observation ({message.name})"
+    if isinstance(message, AIMessage):
+        return "Previous model response or tool decision"
+    return "System prompt" if index == 0 else "Long-term memory"
 
 
 def _shorten_debug_content(content: object) -> str:

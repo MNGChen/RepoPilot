@@ -17,6 +17,8 @@ from app.tools.repository import PROJECT_ROOT
 VECTORSTORE_DIRECTORY: Final = PROJECT_ROOT / "workspace" / "vectorstore"
 COLLECTION_NAME: Final = "devpilot_repository"
 DEFAULT_RESULT_COUNT: Final = 4
+MAX_RETRIEVED_CHUNK_CHARS: Final = 1_500
+CHUNK_TRUNCATION_MARKER: Final = "\n... [repository chunk truncated]"
 
 
 def create_embeddings() -> OpenAIEmbeddings:
@@ -52,7 +54,7 @@ def retrieve_repository_chunks(
 
 
 def format_retrieval_results(documents: list[Document]) -> str:
-    """Format retrieved chunks for a human-readable standalone test."""
+    """Format a bounded set of retrieved chunks for a tool observation."""
     if not documents:
         return "No matching repository chunks were found."
 
@@ -61,9 +63,19 @@ def format_retrieval_results(documents: list[Document]) -> str:
         source = document.metadata.get("source", "unknown source")
         chunk_index = document.metadata.get("chunk_index", "unknown")
         sections.append(
-            f"--- {source} (chunk {chunk_index}) ---\n{document.page_content}"
+            f"--- {source} (chunk {chunk_index}) ---\n"
+            f"{_truncate_retrieved_chunk(document.page_content)}"
         )
     return "\n\n".join(sections)
+
+
+def _truncate_retrieved_chunk(content: str) -> str:
+    """Keep each RAG result useful without allowing one chunk to dominate."""
+    if len(content) <= MAX_RETRIEVED_CHUNK_CHARS:
+        return content
+
+    prefix_length = MAX_RETRIEVED_CHUNK_CHARS - len(CHUNK_TRUNCATION_MARKER)
+    return f"{content[:prefix_length]}{CHUNK_TRUNCATION_MARKER}"
 
 
 def search_repository(query: str) -> str:

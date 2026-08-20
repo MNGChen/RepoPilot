@@ -2,11 +2,12 @@
 
 import os
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 
+from app.agent.context import build_model_context
 from app.agent.state import AgentState
 from app.memory.store import format_memory_context, retrieve_relevant_memories, save_memory
 from app.rag.retriever import search_repository
@@ -52,12 +53,13 @@ MODEL = _build_model()
 
 def agent_node(state: AgentState) -> dict[str, list]:
     """Ask the model for either a tool call or a final response."""
-    system_messages = [SystemMessage(content=SYSTEM_PROMPT)]
-    if state.get("memory_context"):
-        system_messages.append(SystemMessage(content=state["memory_context"]))
-
-    response = MODEL.invoke([*system_messages, *state["messages"]])
-    return {"messages": [response]}
+    model_context = build_model_context(
+        system_prompt=SYSTEM_PROMPT,
+        memory_context=state.get("memory_context", ""),
+        messages=state["messages"],
+    )
+    response = MODEL.invoke(model_context)
+    return {"messages": [response], "model_context": model_context}
 
 
 def retrieve_memory_node(state: AgentState) -> dict[str, str]:

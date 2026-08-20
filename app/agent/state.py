@@ -11,3 +11,4 @@ class AgentState(TypedDict):
 
     messages: Annotated[list[AnyMessage], add_messages]
     memory_context: str
+    model_context: list[AnyMessage]
