@@ -3,3 +3,7 @@ langchain>=1.0,<2.0
 langchain-openai>=1.0,<2.0
 langgraph>=1.0,<2.0
 python-dotenv>=1.0,<2.0
+
+# V2: local semantic repository search.
+langchain-chroma>=1.0,<2.0
+langchain-text-splitters>=1.0,<2.0

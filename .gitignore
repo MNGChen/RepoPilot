@@ -7,6 +7,9 @@ venv/
 # Environment secrets
 .env
 
+# Local V2 Chroma database; rebuild it from workspace/test_repo when needed.
+workspace/vectorstore/
+
 # Tooling
 .pytest_cache/
 .mypy_cache/
