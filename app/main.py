@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
 from app.agent.graph import graph
+from app.agent.nodes import TOOLS
 
 
 MAX_DEBUG_CONTENT_LENGTH = 1_500
@@ -67,6 +68,8 @@ def _print_debug_trace(
     """Display the message history that shows DevPilot's agent loop."""
     print("\n=== DevPilot debug trace ===")
 
+    _print_mcp_status()
+
     if memory_context:
         print(f"\n[0] Long-term memory retrieved\n{memory_context}")
     else:
@@ -80,14 +83,27 @@ def _print_debug_trace(
         elif isinstance(message, AIMessage) and message.tool_calls:
             print(f"\n[{step}] LLM tool decision")
             for tool_call in message.tool_calls:
-                print(f"  → {tool_call['name']}({tool_call['args']})")
+                prefix = "GitHub MCP → " if tool_call["name"].startswith("github_") else ""
+                print(f"  → {prefix}{tool_call['name']}({tool_call['args']})")
         elif isinstance(message, ToolMessage):
-            print(f"\n[{step}] Tool observation: {message.name}")
+            label = "GitHub MCP observation" if message.name.startswith("github_") else "Tool observation"
+            print(f"\n[{step}] {label}: {message.name}")
             print(_shorten_debug_content(message.content))
         elif isinstance(message, AIMessage):
             print(f"\n[{step}] LLM final response generated")
 
     print("\n=== End debug trace ===")
+
+
+def _print_mcp_status() -> None:
+    """Show which discovered GitHub MCP tools are available to this run."""
+    github_tools = [tool.name for tool in TOOLS if tool.name.startswith("github_")]
+    if github_tools:
+        print("\n[MCP] GitHub tools discovered and allowed")
+        for tool_name in github_tools:
+            print(f"  - {tool_name}")
+    else:
+        print("\n[MCP] GitHub tools unavailable; local V1-V4 tools remain active.")
 
 
 def _print_model_contexts(model_contexts: list[list[BaseMessage]]) -> None:

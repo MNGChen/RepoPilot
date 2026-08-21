@@ -4,6 +4,9 @@ langchain-openai>=1.0,<2.0
 langgraph>=1.0,<2.0
 python-dotenv>=1.0,<2.0
 
+# V5: DevPilot acts as an MCP client for GitHub's official MCP server.
+mcp>=2.0,<3.0
+
 # V2: local semantic repository search.
 langchain-chroma>=1.0,<2.0
 langchain-text-splitters>=1.0,<2.0

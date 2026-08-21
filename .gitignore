@@ -7,11 +7,8 @@ venv/
 # Environment secrets
 .env
 
-# Local V2 Chroma database; rebuild it from workspace/test_repo when needed.
-workspace/vectorstore/
-
-# Local V3 memory database; generated from selected durable memories.
-workspace/memory_store/
+# temporary files for testing
+workspace/
 
 # Tooling
 .pytest_cache/

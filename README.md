@@ -2,6 +2,110 @@
 
 DevPilot is a learning-focused AI developer agent for understanding a local code repository. It is built with LangChain, LangGraph, OpenAI, and Chroma.
 
+## V5 — GitHub MCP (Steps 1–2: discovery and read-only calls)
+
+DevPilot will act as an MCP client for GitHub's official MCP Server. The first
+step connects to the server locally through Docker and discovers the tools it
+advertises; LangGraph is not changed yet.
+
+The initial server configuration is deliberately small and safe:
+
+- GitHub's official `ghcr.io/github/github-mcp-server` image.
+- `repos` toolset only.
+- `GITHUB_READ_ONLY=1`, so write tools are not exposed.
+- A fine-grained GitHub personal access token loaded from the local `.env`.
+
+Create a fine-grained PAT with the minimum read-only access needed for the
+repositories you want DevPilot to analyze, then add it to `.env`:
+
+```text
+GITHUB_PERSONAL_ACCESS_TOKEN=github_pat_...
+```
+
+Never commit the token. Docker Desktop must be running before the command
+below. The first run downloads GitHub's public MCP image.
+
+Discover the server's actual tool names, descriptions, and JSON input schemas:
+
+```powershell
+python -X utf8 -m app.mcp.github_client
+```
+
+This command makes DevPilot the MCP client. It launches the GitHub MCP server
+as a temporary child container over standard input/output; there is no separate
+server terminal to keep open for this stdio integration.
+
+After discovery succeeds, test a real read-only MCP tool call. This reads a
+public file from GitHub through the discovered `get_file_contents` tool:
+
+```powershell
+python -X utf8 -m app.mcp.github_client --read-file octocat Hello-World README
+```
+
+Use a repository that your fine-grained token is allowed to access when testing
+private repositories. The command first verifies that the server advertises
+`get_file_contents`, then sends its `owner`, `repo`, and `path` arguments over
+MCP. It prints the result returned by the server and makes no GitHub changes.
+
+For the more convenient URL form, paste a repository or file link directly:
+
+```powershell
+python -X utf8 -m app.mcp.github_client --read-url https://github.com/octocat/Hello-World/blob/master/README
+```
+
+V5 then adds the same MCP capability to the existing LangGraph ToolNode as
+`github_read_file_url(url)`. Keep Docker Desktop running and give DevPilot a
+GitHub URL in its question:
+
+```powershell
+python -X utf8 -m app.main --debug "Explain this file: https://github.com/octocat/Hello-World/blob/master/README"
+```
+
+DevPilot discovers the GitHub server's tools at startup and explicitly allows
+only its read-only repository-analysis capabilities. The Agent-facing URL
+adapter keeps the LLM interface concise while GitHub MCP receives its native
+`owner`, `repo`, `path`, and optional `ref` arguments.
+
+For large remote repositories, V5 also explicitly allows two more read-only
+GitHub MCP tools: `get_repository_tree` and `search_code`. DevPilot exposes
+them as URL-first tools, so it can locate evidence before reading files:
+
+```powershell
+python -X utf8 -m app.mcp.github_client --list-url https://github.com/octocat/Hello-World
+python -X utf8 -m app.mcp.github_client --search-url https://github.com/octocat/Hello-World "README"
+python -X utf8 -m app.main --debug "这个大型项目如何组织？https://github.com/owner/repository"
+```
+
+The intended remote workflow is: list the top-level tree, search code in that
+repository when the server advertises `search_code`, then read only the few
+relevant files. If a GitHub MCP Server does not advertise
+`get_repository_tree`, DevPilot uses `get_file_contents(path="")` to list the
+root instead. DevPilot does not clone, download, or build a Chroma index for
+the remote repository in V5.
+
+## V5 architecture summary
+
+```text
+User supplies a GitHub URL
+    ↓
+DevPilot Agent (LangGraph controls the Agent → Tool → Agent loop)
+    ↓
+GitHub URL adapter LangChain tool
+    ↓
+DevPilot MCP Client discovers/calls approved tools over stdio
+    ↓
+GitHub official MCP Server in Docker (read-only)
+    ↓
+GitHub API result
+    ↓
+Tool result managed by V4 context budgets
+    ↓
+Agent final answer
+```
+
+Run with `--debug` to see the discovered GitHub tools, MCP tool decisions, and
+MCP observations separately from DevPilot's local tools.
+
 ## Capabilities
 
 ### V1 — Tool-using agent
