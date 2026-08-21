@@ -7,7 +7,7 @@ import logging
 
 from langchain_core.tools import BaseTool, tool
 
-from app.mcp.github_client import GitHubMCPClient, parse_github_url
+from app.mcp.github_client import GitHubMCPClient, MCPToolResult, parse_github_url
 
 
 LOGGER = logging.getLogger(__name__)
@@ -19,6 +19,30 @@ ALLOWED_GITHUB_MCP_TOOLS = {
     GITHUB_TREE_TOOL_NAME,
     GITHUB_SEARCH_TOOL_NAME,
 }
+
+# These limits apply before a result becomes a LangGraph ToolMessage. V4 still
+# applies its separate, final context budget before each LLM invocation.
+MAX_GITHUB_TREE_RESULT_CHARS = 3_000
+MAX_GITHUB_SEARCH_RESULT_CHARS = 4_500
+MAX_GITHUB_FILE_RESULT_CHARS = 6_000
+GITHUB_RESULT_TRUNCATION_MARKER = "\n... [truncated by GitHub MCP adapter]"
+
+
+def _bound_tool_result(content: str, maximum_characters: int) -> str:
+    """Limit remote output before it is stored in LangGraph state."""
+    if len(content) <= maximum_characters:
+        return content
+
+    prefix_length = maximum_characters - len(GITHUB_RESULT_TRUNCATION_MARKER)
+    return f"{content[:prefix_length]}{GITHUB_RESULT_TRUNCATION_MARKER}"
+
+
+def _format_tool_result(result: MCPToolResult, maximum_characters: int) -> str:
+    """Return a bounded success or error result from the GitHub MCP client."""
+    text = _bound_tool_result(str(result.text), maximum_characters)
+    if result.is_error:
+        return f"GitHub MCP tool error: {text}"
+    return text
 
 
 def load_github_mcp_tools() -> list[BaseTool]:
@@ -82,9 +106,7 @@ def load_github_mcp_tools() -> list[BaseTool]:
         except Exception as error:
             return f"GitHub MCP connection failed: {error}"
 
-        if result.is_error:
-            return f"GitHub MCP tool error: {result.text}"
-        return result.text
+        return _format_tool_result(result, MAX_GITHUB_FILE_RESULT_CHARS)
 
     @tool("github_list_repository_url")
     def github_list_repository_url(url: str) -> str:
@@ -122,9 +144,12 @@ def load_github_mcp_tools() -> list[BaseTool]:
         except Exception as error:
             return f"GitHub MCP connection failed: {error}"
 
-        if result.is_error:
-            return f"GitHub MCP tool error: {result.text}"
-        return result.text
+        maximum_characters = (
+            MAX_GITHUB_TREE_RESULT_CHARS
+            if tool_name == GITHUB_TREE_TOOL_NAME
+            else MAX_GITHUB_FILE_RESULT_CHARS
+        )
+        return _format_tool_result(result, maximum_characters)
 
     tools: list[BaseTool] = [github_read_file_url, github_list_repository_url]
 
@@ -156,9 +181,7 @@ def load_github_mcp_tools() -> list[BaseTool]:
             except Exception as error:
                 return f"GitHub MCP connection failed: {error}"
 
-            if result.is_error:
-                return f"GitHub MCP tool error: {result.text}"
-            return result.text
+            return _format_tool_result(result, MAX_GITHUB_SEARCH_RESULT_CHARS)
 
         tools.append(github_search_repository_url)
 

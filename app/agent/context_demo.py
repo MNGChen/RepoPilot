@@ -1,4 +1,4 @@
-"""A visible, no-pytest demonstration of DevPilot V4 context selection."""
+"""A visible demonstration of DevPilot context selection."""
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 

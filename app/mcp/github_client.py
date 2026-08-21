@@ -134,6 +134,7 @@ def build_github_server_parameters() -> StdioServerParameters:
 class GitHubMCPClient:
     """Connect to GitHub MCP over stdio and discover the permitted tools."""
 
+    # load server parameters
     def __init__(self, server_parameters: StdioServerParameters | None = None) -> None:
         self._server_parameters = server_parameters or build_github_server_parameters()
 
@@ -179,6 +180,10 @@ class GitHubMCPClient:
         )
 
 
+
+
+# Command-line demonstration of the GitHub MCP client.
+# used for local testing
 async def _discover_and_print() -> None:
     """Run the smallest visible V5 client demonstration."""
     tools = await GitHubMCPClient().discover_tools()

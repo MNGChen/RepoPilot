@@ -7,11 +7,18 @@ venv/
 # Environment secrets
 .env
 
-# temporary files for testing
-workspace/
+# Local repository selected for analysis. Keep only the placeholder directory
+# in Git; source code placed here stays local.
+/workspace/*
+!/workspace/test_repo/
+/workspace/test_repo/*
+!/workspace/test_repo/.gitkeep
+
+# Generated local data
+/workspace/vectorstore/
+/workspace/memory_store/
 
 # Tooling
-.pytest_cache/
 .mypy_cache/
 .ruff_cache/
 
