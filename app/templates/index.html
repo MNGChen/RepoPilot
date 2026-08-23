@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DevPilot · Repository Assistant</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div class="mark" aria-hidden="true">⌘</div>
+        <div>
+          <p class="eyebrow">AI REPOSITORY ASSISTANT</p>
+          <h1>DevPilot</h1>
+          <p class="subtitle">Understand your local repository with natural language.</p>
+        </div>
+        <span class="status"><i></i> Local repository connected</span>
+      </header>
+
+      <section id="conversation" class="conversation" aria-live="polite">
+        <article class="message assistant-message">
+          <div class="avatar">D</div>
+          <div class="bubble">
+            <p>Hi! I can map the project structure, locate an implementation, or explain a file.</p>
+            <div class="suggestions">
+              <button type="button" data-question="What is the structure of this project?">Project structure</button>
+              <button type="button" data-question="Where is the core functionality implemented?">Locate core functionality</button>
+              <button type="button" data-question="What architectural decisions stand out in this project?">Architecture</button>
+              <button type="button" data-question="Analyze this GitHub repository: https://github.com/owner/repository">Analyze a GitHub link</button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <form id="question-form" class="composer">
+        <label class="sr-only" for="question">Ask DevPilot</label>
+        <textarea id="question" name="question" rows="1" maxlength="4000" placeholder="For example: How is authentication implemented?" required></textarea>
+        <button id="submit" type="submit" aria-label="Send question">
+          <span>Send</span><span aria-hidden="true">↑</span>
+        </button>
+      </form>
+      <p class="hint">DevPilot reads <code>workspace/test_repo</code> and supported GitHub repository or file links. <span id="github-status">Checking GitHub access…</span> Press <kbd>Enter</kbd> to send and <kbd>Shift + Enter</kbd> for a new line.</p>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

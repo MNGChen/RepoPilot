@@ -68,6 +68,22 @@ python -X utf8 -m app.main --debug "How is the greeting implemented?"
 
 Use `--debug` to inspect the agent's tool decisions, retrieved memory, and the context selected for each model call.
 
+### Run the web interface
+
+Start the browser interface from the project root:
+
+```powershell
+uvicorn app.web:app --reload
+```
+
+Then open `http://127.0.0.1:8000`. The page sends questions to the same DevPilot
+agent used by the CLI and only analyzes `workspace/test_repo/`.
+
+To analyze a GitHub repository or file link in the same interface, add a
+read-only `GITHUB_PERSONAL_ACCESS_TOKEN` to `.env` and start Docker Desktop
+before starting the web server. Paste either a repository URL or a standard
+file URL such as `https://github.com/owner/repository/blob/main/README.md`.
+
 ## Usage examples
 
 ```powershell
