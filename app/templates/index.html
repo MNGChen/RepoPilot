@@ -40,7 +40,10 @@
           <span>Send</span><span aria-hidden="true">↑</span>
         </button>
       </form>
-      <p class="hint">DevPilot reads <code>workspace/test_repo</code> and supported GitHub repository or file links. <span id="github-status">Checking GitHub access…</span> Press <kbd>Enter</kbd> to send and <kbd>Shift + Enter</kbd> for a new line.</p>
+      <div class="controls">
+        <label class="debug-toggle"><input id="debug-mode" type="checkbox" /> <span>Debug mode</span></label>
+        <p class="hint">Short-term conversation memory is enabled for this browser tab. DevPilot reads <code>workspace/test_repo</code> and supported GitHub repository or file links. <span id="github-status">Checking GitHub access…</span> Press <kbd>Enter</kbd> to send and <kbd>Shift + Enter</kbd> for a new line.</p>
+      </div>
     </main>
     <script src="/static/app.js"></script>
   </body>
